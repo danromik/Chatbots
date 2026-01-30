@@ -14,6 +14,25 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from openai import OpenAI
+from rich.console import Console
+
+console = Console()
+
+DEFAULT_SYSTEM_PROMPT = "You are a helpful math assistant."
+
+
+def load_system_prompt() -> str:
+    """Load system prompt from prompts.txt in the project directory, or use default."""
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.join(project_dir, "prompts.txt")
+    try:
+        with open(path, encoding="utf-8") as f:
+            content = f.read().strip()
+            if content:
+                return content
+    except FileNotFoundError:
+        pass
+    return DEFAULT_SYSTEM_PROMPT
 
 
 def read_multiline_prompt() -> str:
@@ -27,7 +46,8 @@ def read_multiline_prompt() -> str:
         import tty
     except ImportError:
         # Non-Unix (e.g. Windows): fallback to "empty line to submit"
-        print("Enter your prompt (multiline). Submit with an empty line.")
+        console.print("I am Alfred, your mathematical assistant.", style="bold")
+        console.print("Enter your question (multiline). Submit with an empty line.", style="dim")
         lines = []
         while True:
             try:
@@ -43,8 +63,9 @@ def read_multiline_prompt() -> str:
     current = []
 
     try:
-        print("Enter your prompt (multiline). Submit with Ctrl-S, abort with Ctrl-C.")
-        print()
+        console.print("I am Alfred, your mathematical assistant.", style="bold")
+        console.print("Enter your question (multiline). Submit with Ctrl-S, abort with Ctrl-C.", style="dim")
+        console.print()
         sys.stdout.flush()
         tty.setraw(fd)
         while True:
@@ -78,41 +99,46 @@ def main() -> None:
     try:
         prompt = read_multiline_prompt()
     except KeyboardInterrupt:
-        print("\nAborted.")
+        console.print("\nAborted.", style="dim")
         sys.exit(0)
 
     if not prompt.strip():
-        print("Empty prompt. Exiting.")
+        console.print("Empty prompt. Exiting.", style="dim")
         sys.exit(0)
 
-    print("Submitting prompt...")
+    console.print("\n[Submitting prompt...]", style="bold cyan")
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        print("Error: OPENAI_API_KEY not set. Add it to a .env file in this project.")
+        console.print("Error: OPENAI_API_KEY not set. Add it to a .env file in this project.", style="bold red")
         sys.exit(1)
 
     client = OpenAI(api_key=api_key)
+    system_prompt = load_system_prompt()
 
     start = time.perf_counter()
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
         )
     except Exception as e:
-        print(f"API error: {e}", file=sys.stderr)
+        console.print(f"API error: {e}", style="bold red")
         sys.exit(1)
 
     elapsed = time.perf_counter() - start
     usage = response.usage
     total_tokens = usage.total_tokens if usage else 0
 
-    print()
-    print(f"[ {elapsed:.2f}s, {total_tokens} tokens ]")
-    print()
+    console.print()
+    console.print(f"[ {elapsed:.2f}s, {total_tokens} tokens ]", style="cyan")
+    console.print("LLM response:", style="bold")
+    console.print()
     content = response.choices[0].message.content
     if content:
-        print(content)
+        console.print(content, style="blue")
 
 
 if __name__ == "__main__":
