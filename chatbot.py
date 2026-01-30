@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
 Command-line chatbot: multiline prompt (submit with Ctrl-S, abort with Ctrl-C),
-sends to OpenAI API and prints timing, token usage, and response.
+sends to OpenAI API or a local OpenAI-compatible LLM; prints timing, token usage, and response.
 """
 
+import argparse
 import os
 import sys
 import time
@@ -19,6 +20,7 @@ from rich.console import Console
 console = Console()
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful math assistant."
+LOCAL_LLM_BASE_URL = "http://localhost:1234/v1"
 
 
 def load_system_prompt() -> str:
@@ -96,6 +98,14 @@ def read_multiline_prompt() -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Chatbot: send prompts to OpenAI or a local LLM.")
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        help="Use local LLM at localhost:1234 (OpenAI-compatible API) instead of OpenAI.",
+    )
+    args = parser.parse_args()
+
     try:
         prompt = read_multiline_prompt()
     except KeyboardInterrupt:
@@ -107,12 +117,14 @@ def main() -> None:
         sys.exit(0)
 
     console.print("\n[Submitting prompt...]", style="bold cyan")
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        console.print("Error: OPENAI_API_KEY not set. Add it to a .env file in this project.", style="bold red")
-        sys.exit(1)
-
-    client = OpenAI(api_key=api_key)
+    if args.local:
+        client = OpenAI(base_url=LOCAL_LLM_BASE_URL, api_key="not needed")
+    else:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            console.print("Error: OPENAI_API_KEY not set. Add it to a .env file in this project.", style="bold red")
+            sys.exit(1)
+        client = OpenAI(api_key=api_key)
     system_prompt = load_system_prompt()
 
     start = time.perf_counter()
